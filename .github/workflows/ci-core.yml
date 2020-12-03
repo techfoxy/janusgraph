@@ -26,13 +26,15 @@ on:
 
 env:
   ES_JAVA_OPTS: "-Xms256m -Xmx512m"
+  BUILD_MAVEN_OPTS: "-Dmaven.javadoc.skip=true -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120  -DskipTests=true --batch-mode --also-make"
+  VERIFY_MAVEN_OPTS: "-Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -Pcoverage"
 
 jobs:
   build:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/cache@v1
+      - uses: actions/cache@v2
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -41,8 +43,7 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: 1.8
-      - run: mvn clean install --projects janusgraph-all --also-make 
-          -DskipTests=true -Dmaven.javadoc.skip=true --batch-mode
+      - run: mvn clean install --projects janusgraph-all ${{ env.BUILD_MAVEN_OPTS }}
 
   tests:
     runs-on: ubuntu-20.04
@@ -56,7 +57,7 @@ jobs:
           - module: test
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/cache@v1
+      - uses: actions/cache@v2
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -65,7 +66,12 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: 1.8
-      - run: mvn clean install --projects janusgraph-${{ matrix.module }} --also-make 
-          -DskipTests=true -Dmaven.javadoc.skip=true --batch-mode ${{ matrix.install-args }}
-      - run: mvn verify --projects janusgraph-${{ matrix.module }} -Pcoverage ${{ matrix.args }}
+      - run: mvn clean install --projects janusgraph-${{ matrix.module }} ${{ env.BUILD_MAVEN_OPTS }} ${{ matrix.install-args }}
+      - run: mvn verify --projects janusgraph-${{ matrix.module }} ${{ env.VERIFY_MAVEN_OPTS }} ${{ matrix.args }}
+      - name: Publish Test Report
+        uses: scacap/action-surefire-report@v1
+        if: ${{ always() }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          check_name: ${{ matrix.module}} Test Report
       - uses: codecov/codecov-action@v1
